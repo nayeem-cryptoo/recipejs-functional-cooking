@@ -129,6 +129,11 @@ const filterByTime = (recipes, maxTime) => {
     return recipes.filter(recipe => recipe.time <= maxTime);
 };
 
+// Filter recipes by category
+const filterByCategory = (recipes, category) => {
+    return recipes.filter(recipe => recipe.category === category);
+};
+
 // Apply the current filter
 const applyFilter = (recipes, filterType) => {
     switch(filterType) {
@@ -140,6 +145,10 @@ const applyFilter = (recipes, filterType) => {
             return filterByDifficulty(recipes, 'hard');
         case 'quick':
             return filterByTime(recipes, 30);
+        case 'pasta':
+            return filterByCategory(recipes, 'pasta');
+        case 'curry':
+            return filterByCategory(recipes, 'curry');
         case 'all':
         default:
             return recipes;  // Return all recipes (no filter)
@@ -282,3 +291,30 @@ setupEventListeners();
 
 // Initial render with default filter/sort
 updateDisplay();
+
+console.log('Filter buttons:', filterButtons);  // Should show NodeList
+console.log('Setup called?');  // Add to setupEventListeners()
+
+// Add to updateDisplay()
+console.log('Recipes before filter:', recipesToDisplay.length);
+recipesToDisplay = applyFilter(recipesToDisplay, currentFilter);
+console.log('Recipes after filter:', recipesToDisplay.length);
+
+
+// Make sure you REMOVE active from all buttons
+btn.classList.remove('active');
+// Then ADD to the current one
+if (filterType === currentFilter) {
+    btn.classList.add('active');
+}
+
+console.log('1. Starting with:', recipesToDisplay.length);
+recipesToDisplay = applyFilter(recipesToDisplay, currentFilter);
+console.log('2. After filter:', recipesToDisplay.length);
+recipesToDisplay = applySort(recipesToDisplay, currentSort);
+console.log('3. After sort:', recipesToDisplay.length);
+
+
+const sortByTimeLongest = (recipes) => {
+    return [...recipes].sort((a, b) => b.time - a.time);
+};
