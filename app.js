@@ -3,7 +3,7 @@
 // ============================================
 
 const RecipeApp = (() => {
-    console.log('RecipeApp initializing...');
+    'use strict';
     
     // ============================================
     // PRIVATE: RECIPE DATA
@@ -323,6 +323,11 @@ const RecipeApp = (() => {
     const recipeContainer = document.querySelector('#recipe-container');
     const filterButtons = document.querySelectorAll('.filter-btn');
     const sortButtons = document.querySelectorAll('.sort-btn');
+    
+    // NEW: Search and counter references
+    const searchInput = document.querySelector('#search-input');
+    const clearSearchBtn = document.querySelector('#clear-search');
+    const recipeCountDisplay = document.querySelector('#recipe-count');
 
     // ============================================
     // PRIVATE: RECURSIVE STEP RENDERING
@@ -363,8 +368,18 @@ const RecipeApp = (() => {
     
     // Function to create HTML for a single recipe card
     const createRecipeCard = (recipe) => {
+        // Check if favorited
+        const isFavorited = favorites.includes(recipe.id);
+        const heartIcon = isFavorited ? '❤️' : '🤍';
+        
         return `
             <div class="recipe-card" data-id="${recipe.id}">
+                <!-- NEW: Favorite Button -->
+                <button class="favorite-btn ${isFavorited ? 'favorited' : ''}" 
+                        data-recipe-id="${recipe.id}">
+                    ${heartIcon}
+                </button>
+                
                 <h3>${recipe.title}</h3>
                 <div class="recipe-meta">
                     <span>⏱️ ${recipe.time} min</span>
@@ -414,6 +429,11 @@ const RecipeApp = (() => {
     // Track current filter and sort settings
     let currentFilter = 'all';
     let currentSort = 'none';
+    
+    // NEW: Add search and favorites state
+    let searchQuery = '';
+    let favorites = JSON.parse(localStorage.getItem('recipeFavorites')) || [];
+    let debounceTimer;
 
     // ============================================
     // PRIVATE: FILTER FUNCTIONS
@@ -438,6 +458,35 @@ const RecipeApp = (() => {
         return recipes.filter(recipe => recipe.category === category);
     };
 
+    // NEW: Search filter
+    const filterBySearch = (recipes, query) => {
+        if (!query || query.trim() === '') {
+            return recipes;
+        }
+        
+        const lowerQuery = query.toLowerCase().trim();
+        
+        return recipes.filter(recipe => {
+            // Search in title
+            const titleMatch = recipe.title.toLowerCase().includes(lowerQuery);
+            
+            // Search in ingredients (use .some())
+            const ingredientMatch = recipe.ingredients.some(ingredient => 
+                ingredient.toLowerCase().includes(lowerQuery)
+            );
+            
+            // Search in description
+            const descriptionMatch = recipe.description.toLowerCase().includes(lowerQuery);
+            
+            return titleMatch || ingredientMatch || descriptionMatch;
+        });
+    };
+    
+    // NEW: Favorites filter
+    const filterFavorites = (recipes) => {
+        return recipes.filter(recipe => favorites.includes(recipe.id));
+    };
+
     // Apply the current filter
     const applyFilter = (recipes, filterType) => {
         switch(filterType) {
@@ -453,6 +502,8 @@ const RecipeApp = (() => {
                 return filterByCategory(recipes, 'pasta');
             case 'curry':
                 return filterByCategory(recipes, 'curry');
+            case 'favorites':
+                return filterFavorites(recipes);
             case 'all':
             default:
                 return recipes;  // Return all recipes (no filter)
@@ -492,26 +543,42 @@ const RecipeApp = (() => {
         }
     };
 
+    // Update recipe counter
+    const updateRecipeCounter = (showing, total) => {
+        if (recipeCountDisplay) {
+            recipeCountDisplay.textContent = `Showing ${showing} of ${total} recipes`;
+        }
+    };
+
     // ============================================
     // PRIVATE: MAIN UPDATE FUNCTION
     // ============================================
-    // This function combines filter + sort + render
+    // This function combines search + filter + sort + render
 
     const updateDisplay = () => {
         // Step 1: Start with all recipes
         let recipesToDisplay = recipes;
         
-        // Step 2: Apply current filter
+        // Step 2: Apply search first (narrows results)
+        recipesToDisplay = filterBySearch(recipesToDisplay, searchQuery);
+        
+        // Step 3: Apply current filter (further narrows)
         recipesToDisplay = applyFilter(recipesToDisplay, currentFilter);
         
-        // Step 3: Apply current sort
+        // Step 4: Apply current sort (reorders)
         recipesToDisplay = applySort(recipesToDisplay, currentSort);
         
-        // Step 4: Render the filtered and sorted recipes
+        // Step 5: Update counter
+        updateRecipeCounter(recipesToDisplay.length, recipes.length);
+        
+        // Step 6: Render the filtered and sorted recipes
         renderRecipes(recipesToDisplay);
         
-        // Step 5: Log for debugging
-        console.log(`Displaying ${recipesToDisplay.length} recipes (Filter: ${currentFilter}, Sort: ${currentSort})`);
+        // Step 7: Update active buttons
+        updateActiveButtons();
+        
+        // Step 8: Log for debugging
+        console.log(`Displaying ${recipesToDisplay.length} recipes (Filter: ${currentFilter}, Sort: ${currentSort}, Search: "${searchQuery}")`);
     };
 
     // ============================================
@@ -539,6 +606,31 @@ const RecipeApp = (() => {
                 btn.classList.remove('active');
             }
         });
+    };
+
+    // ============================================
+    // PRIVATE: FAVORITES MANAGEMENT
+    // ============================================
+
+    // Save favorites to localStorage
+    const saveFavorites = () => {
+        localStorage.setItem('recipeFavorites', JSON.stringify(favorites));
+    };
+
+    // Toggle favorite status
+    const toggleFavorite = (recipeId) => {
+        const id = parseInt(recipeId);
+        
+        if (favorites.includes(id)) {
+            // Remove from favorites
+            favorites = favorites.filter(fav => fav !== id);
+        } else {
+            // Add to favorites
+            favorites.push(id);
+        }
+        
+        saveFavorites();
+        updateDisplay();
     };
 
     // ============================================
@@ -599,6 +691,49 @@ const RecipeApp = (() => {
         }
     };
 
+    // NEW: Search input handler
+    const handleSearchInput = (event) => {
+        const query = event.target.value;
+        
+        // Show/hide clear button
+        if (clearSearchBtn) {
+            clearSearchBtn.style.display = query ? 'block' : 'none';
+        }
+        
+        // Implement debouncing
+        // Clear existing timer
+        clearTimeout(debounceTimer);
+        
+        // Set new timer
+        debounceTimer = setTimeout(() => {
+            // Update search query and display after 300ms
+            searchQuery = query;
+            updateDisplay();
+        }, 300);
+    };
+
+    // NEW: Clear search handler
+    const handleClearSearch = () => {
+        searchQuery = '';
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        if (clearSearchBtn) {
+            clearSearchBtn.style.display = 'none';
+        }
+        updateDisplay();
+    };
+
+    // NEW: Favorite button handler (event delegation)
+    const handleFavoriteClick = (event) => {
+        if (!event.target.classList.contains('favorite-btn')) {
+            return;
+        }
+        
+        const recipeId = event.target.dataset.recipeId;
+        toggleFavorite(recipeId);
+    };
+
     // ============================================
     // PRIVATE: EVENT LISTENER SETUP
     // ============================================
@@ -618,6 +753,19 @@ const RecipeApp = (() => {
         // One listener on parent catches all toggle button clicks
         recipeContainer.addEventListener('click', handleToggleClick);
         
+        // NEW: Search input listener
+        if (searchInput) {
+            searchInput.addEventListener('input', handleSearchInput);
+        }
+        
+        // NEW: Clear search button listener
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', handleClearSearch);
+        }
+        
+        // NEW: Favorite button listener (event delegation)
+        recipeContainer.addEventListener('click', handleFavoriteClick);
+        
         console.log('Event listeners attached!');
     };
 
@@ -626,10 +774,12 @@ const RecipeApp = (() => {
     // ============================================
 
     const init = () => {
-        console.log('RecipeApp initializing...');
+        console.log('🍳 RecipeJS initializing...');
         setupEventListeners();
         updateDisplay();
-        console.log('RecipeApp ready!');
+        console.log('✅ RecipeJS ready!');
+        console.log(`📊 ${recipes.length} recipes loaded`);
+        console.log(`❤️  ${favorites.length} favorites saved`);
     };
 
     // ============================================
